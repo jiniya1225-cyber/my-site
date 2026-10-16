@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>우리 집 장보기</title>
+<style>
+  :root {
+    --bg: #fdf6ec;
+    --card: #fffdf9;
+    --orange: #f08a3c;
+    --orange-dark: #d9702a;
+    --orange-soft: #fde3cc;
+    --text: #4a3b2f;
+    --muted: #a8998b;
+    --line: #f1e4d3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Gowun Dodum", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-size: 17px;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 {
+    margin: 0 0 20px;
+    text-align: center;
+    color: var(--orange-dark);
+    font-size: 30px;
+    letter-spacing: -0.5px;
+  }
+  .add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: var(--card);
+    padding: 14px;
+    border-radius: 20px;
+    box-shadow: 0 4px 14px rgba(200, 140, 80, 0.12);
+    margin-bottom: 22px;
+  }
+  .add input, .add select {
+    font: inherit;
+    color: var(--text);
+    border: 2px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: #fff;
+    outline: none;
+  }
+  .add input { flex: 1 1 180px; min-width: 0; }
+  .add select { flex: 0 1 auto; }
+  .add input:focus, .add select:focus { border-color: var(--orange); }
+  .add button {
+    font: inherit;
+    font-weight: bold;
+    border: none;
+    border-radius: 14px;
+    padding: 10px 20px;
+    background: var(--orange);
+    color: #fff;
+    cursor: pointer;
+  }
+  .add button:hover { background: var(--orange-dark); }
+
+  .card {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 14px 16px 8px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 14px rgba(200, 140, 80, 0.12);
+  }
+  .card h2 {
+    margin: 0 0 6px;
+    font-size: 19px;
+    padding-bottom: 8px;
+    border-bottom: 2px dashed var(--orange-soft);
+  }
+  .card ul { list-style: none; margin: 0; padding: 0; }
+  .card li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .card li:last-child { border-bottom: none; }
+  .card label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .card input[type=checkbox] {
+    appearance: none;
+    width: 24px; height: 24px;
+    flex: none;
+    border: 2px solid var(--orange);
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+  }
+  .card input[type=checkbox]:checked { background: var(--orange); }
+  .card input[type=checkbox]:checked::after {
+    content: "";
+    width: 6px; height: 11px;
+    border: solid #fff;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .name { overflow-wrap: anywhere; }
+  li.done .name { color: var(--muted); text-decoration: line-through; }
+  li.done { opacity: 0.6; }
+  .del {
+    flex: none;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .del:hover { background: var(--orange-soft); color: var(--orange-dark); }
+  .empty { color: var(--muted); font-size: 15px; padding: 8px 2px 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛒 우리 집 장보기</h1>
+
+  <form class="add" id="addForm">
+    <input id="newName" type="text" placeholder="살 것을 적어 주세요" autocomplete="off">
+    <select id="newCat"></select>
+    <button type="submit">추가</button>
+  </form>
+
+  <div id="list"></div>
+</div>
+
+<script>
+  const KEY = "our-home-shopping-list-v1";
+  const CATS = [
+    { id: "veg",   name: "🥬 채소·과일" },
+    { id: "meat",  name: "🥩 고기·생선" },
+    { id: "dairy", name: "🥛 유제품·계란" },
+    { id: "pantry", name: "🍚 가공·양념" },
+    { id: "home",  name: "🧻 생활용품" }
+  ];
+  const DEFAULTS = {
+    veg: ["대파", "양파", "감자", "사과"],
+    meat: ["돼지고기", "닭가슴살", "고등어"],
+    dairy: ["우유", "계란", "치즈"],
+    pantry: ["두부", "라면", "간장", "쌀"],
+    home: ["휴지", "주방세제", "쓰레기봉투"]
+  };
+
+  let items = load();
+
+  function makeId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEY));
+      if (Array.isArray(saved)) return saved;
+    } catch (e) {}
+    const list = [];
+    for (const cat of CATS) {
+      for (const name of DEFAULTS[cat.id]) list.push({ id: makeId(), name, cat: cat.id, done: false });
+    }
+    return list;
+  }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(items)); } catch (e) {}
+  }
+
+  function render() {
+    const root = document.getElementById("list");
+    root.innerHTML = "";
+    for (const cat of CATS) {
+      const card = document.createElement("section");
+      card.className = "card";
+      const h = document.createElement("h2");
+      h.textContent = cat.name;
+      card.appendChild(h);
+
+      const mine = items.filter(it => it.cat === cat.id);
+      if (mine.length === 0) {
+        const p = document.createElement("div");
+        p.className = "empty";
+        p.textContent = "아직 항목이 없어요";
+        card.appendChild(p);
+      } else {
+        const ul = document.createElement("ul");
+        for (const it of mine) {
+          const li = document.createElement("li");
+          if (it.done) li.className = "done";
+
+          const label = document.createElement("label");
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = it.done;
+          box.addEventListener("change", () => {
+            it.done = box.checked;
+            save();
+            render();
+          });
+          const span = document.createElement("span");
+          span.className = "name";
+          span.textContent = it.name;
+          label.append(box, span);
+
+          const del = document.createElement("button");
+          del.className = "del";
+          del.type = "button";
+          del.title = "삭제";
+          del.setAttribute("aria-label", it.name + " 삭제");
+          del.textContent = "×";
+          del.addEventListener("click", () => {
+            items = items.filter(x => x.id !== it.id);
+            save();
+            render();
+          });
+
+          li.append(label, del);
+          ul.appendChild(li);
+        }
+        card.appendChild(ul);
+      }
+      root.appendChild(card);
+    }
+  }
+
+  const select = document.getElementById("newCat");
+  for (const cat of CATS) {
+    const opt = document.createElement("option");
+    opt.value = cat.id;
+    opt.textContent = cat.name;
+    select.appendChild(opt);
+  }
+
+  document.getElementById("addForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const input = document.getElementById("newName");
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    items.push({ id: makeId(), name, cat: select.value, done: false });
+    save();
+    render();
+    input.value = "";
+    input.focus();
+  });
+
+  render();
+</script>
+</body>
+</html>
